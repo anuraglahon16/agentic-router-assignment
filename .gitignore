@@ -1,0 +1,13 @@
+# Secrets — never commit
+.env
+.env.*
+!.env.example
+
+# Local artifacts
+.ipynb_checkpoints/
+__pycache__/
+Agentic_RAG/
+multi-agent-course/
+venv/
+.venv/
+.DS_Store
