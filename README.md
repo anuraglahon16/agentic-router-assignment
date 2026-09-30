@@ -1,7 +1,7 @@
 # Agentic Router
 
 Sub-query division and an RBAC-aware semantic cache for the Agentic Router notebook
-(Module 3, [multi-agent-course](https://github.com/hamzafarooq/multi-agent-course)).
+
 
 ## Overview
 
