@@ -92,6 +92,7 @@ Embeddings come from `nomic-ai/nomic-embed-text-v1.5`, and the chat model is `gp
 | Malformed split fallback | Anything unusable becomes `[original query]` | Parser robustness: truncated, empty, `None`, API error |
 | Single-query behavior | One sub-query means no composition call, answer returned as-is | Case 1; `test_single_query_no_extra_calls` |
 | Concurrency (stretch) | `concurrent=True`: `asyncio.gather` + `asyncio.to_thread` | Stretch cell; Evaluation §4 benchmark |
+| Factual accuracy (10-K) | Year-column instruction in the RAG prompt | Evaluation §6 spot-check |
 | RBAC semantic cache (bonus) | `RoleAwareSemanticCache` (`src/cache.py`) + `secure_agentic_rag_cached()` | `run_self_check()`, `run_extra_checks()`, Evaluation §5 matrix |
 
 ## Required Examples
@@ -114,10 +115,11 @@ LLM routing is not deterministic, so re-runs can differ slightly.
 |---|---|
 | Routing accuracy (28 queries: OpenAI, 10-K, internet, ambiguous, compound) | **35/35 route decisions (100%)** |
 | Split accuracy | **28/28 queries (100%)** |
-| Mean split + route latency | 2.65 s per query |
+| Mean split + route latency | 2.90 s per query |
 | Live compound cases (same-route, mixed, 3-part, duplicate, 7 questions capped to 5) | 5/5, citations traceable in 3/3 full runs |
 | Parser robustness (splitter + router, scripted bad output) | 20/20 |
 | Citation tests | 10/10 |
+| 10-K answer spot-check (Uber 2021, Lyft 2020/2021/2022; 3 runs each) | 4/4 questions correct in every run |
 | Cache / RBAC matrix | 13/13 |
 | `run_self_check()` / `run_extra_checks()` | both pass |
 | Offline pytest suite | 13/13 |
@@ -126,22 +128,33 @@ LLM routing is not deterministic, so re-runs can differ slightly.
 
 | Query | Sub-queries | Sequential | Concurrent | Speedup |
 |---|---|---|---|---|
-| Lyft 2021 revenue + Uber 2021 revenue | 2 | 8.34 s | 7.37 s | ×1.13 |
-| Uber 2021 revenue + newest LLMs | 2 | 6.67 s | 6.17 s | ×1.08 |
-| Guardrails + Lyft revenue + newest LLMs | 3 | 14.71 s | 9.68 s | ×1.52 |
-| OpenAI embeddings + latest Super Bowl | 2 | 9.41 s | 8.11 s | ×1.16 |
-| **Average** | | **9.78 s** | **7.83 s** | **×1.22** |
+| Lyft 2021 revenue + Uber 2021 revenue | 2 | 7.52 s | 4.97 s | ×1.51 |
+| Uber 2021 revenue + newest LLMs | 2 | 7.12 s | 6.72 s | ×1.06 |
+| Guardrails + Lyft revenue + newest LLMs | 3 | 19.00 s | 10.74 s | ×1.77 |
+| OpenAI embeddings + latest Super Bowl | 2 | 9.85 s | 7.67 s | ×1.28 |
+| **Average** | | **10.87 s** | **7.53 s** | **×1.41** |
 
-Concurrent execution was faster on all 4 queries. The gain is modest because the split and the
-final composition stay sequential; it is largest for the 3-part query. With one run per query,
-these are indicative rather than statistically robust.
+Concurrent execution was faster on all 4 queries. The split and the final composition stay
+sequential, so the gain grows with the number of sub-queries, and it is largest for the 3-part
+query. With one run per query these figures are indicative, not statistically robust: the
+previous run measured ×1.22 on the same queries.
 
-**Known limitation.** The evaluation checks routing, splitting, citations and access control. It
-does not check whether an answer is factually right. In the committed run, the course's RAG step
-reported Lyft's 2021 revenue as $4.095B, which is the 2022 figure from the same 10-K table; the
-correct 2021 figure is $3.208B. Routing and retrieval were correct, but the answering model read
-the wrong column. The internet route also returns raw search snippets, so "newest LLMs" answers
-are only as good as the top five results.
+### RAG prompt fix (multi-year 10-K tables)
+
+The evaluation originally checked routing, splitting, citations and access control, but not
+whether an answer was factually right, and one wasn't. Lyft's 10-K shows 2022, 2021 and 2020
+revenue side by side in one table, and the course's RAG prompt often reported the 2022 figure
+($4.095B) as 2021 revenue (correct: $3.208B). One line was added to the RAG prompt telling the
+model to match each figure to its year column. Measured on the same retrieved context:
+
+| RAG prompt | Lyft 2021 | Lyft 2022 (control) | Uber 2021 (control) |
+|---|---|---|---|
+| Original | 3/8 correct (5/8 gave the 2022 figure) | 8/8 | 8/8 |
+| + year-column instruction | **8/8** | 8/8 | 8/8 |
+
+The notebook's 10-K spot-check (Evaluation §6) now guards against this regression. One
+limitation remains: the internet route returns raw search snippets, so answers such as "newest
+LLMs" are only as good as the top five Google results.
 
 ## Security / Cache
 
@@ -241,5 +254,5 @@ requirements.txt
 ```
 
 The course's own retrieval code (embeddings, Qdrant search, RAG prompt, SerpApi tool) stays in
-the notebook unchanged. `src/` holds the assignment logic, which gets its clients and route
+the notebook. Its only change is one added line in the RAG prompt, the year-column fix above. `src/` holds the assignment logic, which gets its clients and route
 handlers passed in.

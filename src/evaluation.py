@@ -308,6 +308,43 @@ def run_concurrency_benchmark(ctx: AgentContext, queries: list[str] = BENCHMARK_
     return df, summary
 
 
+# Ground truth read from the 10-K text in the Qdrant collection (revenue tables).
+# "right" accepts any rounding of the asked year's figure; "wrong" flags a neighbouring year's.
+ANSWER_SPOT_CHECKS: list[dict] = [
+    {"query": "What was Uber's revenue in 2021?", "truth": "$17,455M",
+     "right": r"17[.,]\d+\s*(billion|B)|17,455", "wrong": r"11[.,]1\d*\s*(billion|B)|11,139"},
+    {"query": "What was Lyft's revenue in 2021?", "truth": "$3,208,323K",
+     "right": r"3[.,]2\d*\s*(billion|B)|3,208", "wrong": r"4[.,][01]\d*\s*(billion|B)|4,095|2[.,]36\d*\s*(billion|B)|2,364"},
+    {"query": "What was Lyft's revenue in 2022?", "truth": "$4,095,135K",
+     "right": r"4[.,][01]\d*\s*(billion|B)|4,095", "wrong": r"3[.,]2\d*\s*(billion|B)|3,208"},
+    {"query": "What was Lyft's revenue in 2020?", "truth": "$2,364,681K",
+     "right": r"2[.,]36\d*\s*(billion|B)|2[.,]4\s*(billion|B)|2,364", "wrong": r"3[.,]2\d*\s*(billion|B)|3,208|4,095"},
+]
+
+
+def run_answer_spot_check(ctx: AgentContext, checks: list[dict] = ANSWER_SPOT_CHECKS,
+                          runs: int = 3, max_workers: int = 4) -> pd.DataFrame:
+    """
+    Factual spot-check of 10-K answers (retrieval + RAG, routing bypassed): each question is
+    answered `runs` times and graded against the filing's figures.
+    """
+    from .retrieval import execute_route
+
+    def one(check: dict) -> str:
+        return execute_route(check["query"], K, ctx.routes)
+
+    rows = []
+    for check in checks:
+        with ThreadPoolExecutor(max_workers=max_workers) as pool:
+            answers = list(pool.map(lambda _: one(check), range(runs)))
+        right = sum(bool(re.search(check["right"], a)) and not re.search(check["wrong"], a) for a in answers)
+        wrong = sum(bool(re.search(check["wrong"], a)) for a in answers)
+        rows.append({"Query": check["query"], "10-K Figure": check["truth"],
+                     "Correct": f"{right}/{runs}", "Wrong Year": f"{wrong}/{runs}",
+                     "Sample Answer": answers[0][:120].replace("\n", " "), "Pass": right == runs})
+    return pd.DataFrame(rows)
+
+
 def run_cache_matrix(ctx: AgentContext, make_cache: Callable[[], Any]) -> pd.DataFrame:
     """RBAC + semantic-cache scenarios against the real router and pipeline."""
     cache, log, rows = make_cache(), [], []
