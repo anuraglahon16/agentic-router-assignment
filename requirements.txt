@@ -1,0 +1,31 @@
+# Agentic Router — tested with Python 3.10 (Colab ships 3.11+; both work).
+# Versions are the ones the notebook and tests were last run with.
+
+# LLM (router, splitter, RAG answers, composition) + structured outputs
+openai==3.22.1
+pydantic==2.13.5
+
+# Vector store (prebuilt Qdrant collections, local mode)
+qdrant-client==1.19.1
+
+# Embeddings: nomic-ai/nomic-embed-text-v1.5 (loaded with trust_remote_code, needs einops)
+transformers==4.48.0
+torch==2.14.0
+einops==0.8.2
+
+# Numerics, evaluation tables
+numpy==2.2.6
+pandas==2.3.3
+
+# SerpApi web search + notebook plumbing
+requests==2.34.2
+python-dotenv==1.2.3
+nest-asyncio==1.6.0
+matplotlib==3.10.9          # imported by the course's setup cell
+
+# Optional — semantic-cache search. Without it, RoleAwareSemanticCache uses an exact
+# NumPy search with identical results (slower only at large cache sizes).
+faiss-cpu==1.15.1
+
+# Tests
+pytest==9.1.1

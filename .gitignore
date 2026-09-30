@@ -6,6 +6,7 @@
 # Local artifacts
 .ipynb_checkpoints/
 __pycache__/
+.pytest_cache/
 Agentic_RAG/
 multi-agent-course/
 venv/
